@@ -12,7 +12,7 @@ from utils.logger import statistics_log
 from evaluation import prepare_task_input, evaluate_embedding
 import time
 
-def training(train_loader, learner, args):
+def training(train_loader, learner, args, intention_key=None):
     print('\n={}/{}=Iterations/Batches'.format(args.max_iter, len(train_loader)))
     t0 = time.time()
     learner.model.train()
@@ -29,13 +29,35 @@ def training(train_loader, learner, args):
         
         if (args.print_freq>0) and ((i%args.print_freq==0) or (i==args.max_iter)):
             statistics_log(args.tensorboard, losses=losses, global_step=i)
-            evaluate_embedding(learner.model, args, i)
+            evaluate_embedding(learner.model, args, i, intention_key, train_loader)
             learner.model.train()
         ## STOPPING CRITERION (due to some license issue, we still need some time to release the data)
         # you need to implement your own stopping criterion, the one we typically use is 
         # diff (cluster_assignment_at_previous_step - cluster_assignment_at_previous_step) / all_data_samples <= criterion
     return None   
 
+def training_simcse(train_loader, learner, args, intention_key=None):
+    print('\n={}/{}=Iterations/Batches'.format(args.max_iter, len(train_loader)))
+    t0 = time.time()
+    learner.model.train()
+    for i in np.arange(args.max_iter+1):
+        try:
+            batch = next(train_loader_iter)
+        except:
+            train_loader_iter = iter(train_loader)
+            batch = next(train_loader_iter)
+        
+        feats, labels = prepare_task_input(learner.model, batch, args, is_contrastive=True)
 
+        losses = learner.forward_simcse(feats, labels, use_perturbation=args.use_perturbation, args=args)
+        
+        if (args.print_freq>0) and ((i%args.print_freq==0) or (i==args.max_iter)):
+            statistics_log(args.tensorboard, losses=losses, global_step=i)
+            evaluate_embedding(learner.model, args, i, intention_key, train_loader)
+            learner.model.train()
+        ## STOPPING CRITERION (due to some license issue, we still need some time to release the data)
+        # you need to implement your own stopping criterion, the one we typically use is 
+        # diff (cluster_assignment_at_previous_step - cluster_assignment_at_previous_step) / all_data_samples <= criterion
+    return None  
 
              

@@ -15,7 +15,7 @@ python main.py \
     --max_iter 10 \
     --print_freq 250 \
     --seed 0 \
-    --gpuid 0 &
+    --gpuid 0
 
 
 

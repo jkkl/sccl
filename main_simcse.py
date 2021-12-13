@@ -15,7 +15,7 @@ from sentence_transformers import SentenceTransformer
 from models.Transformers import SCCLBert
 from learners.cluster import ClusterLearner
 from dataloader.dataloader import augment_loader
-from training import training
+from training import training, training_simcse
 from utils.kmeans import get_kmeans_centers
 from utils.logger import setup_path
 from utils.randomness import set_global_random_seed
@@ -31,7 +31,7 @@ MODEL_CLASS = {
     "bertlarge": 'bert-large-nli-stsb-mean-tokens',
     "bertbase": 'bert-base-nli-stsb-mean-tokens',
     # "chinese": 'distiluse-base-multilingual-cased-v1',
-    "chinese": 'saved_models/paraphrase-xlm-r-multilingual-v1'
+    "chinese": '/mnt/user/wangyuanzhuo/sccl/saved_models/paraphrase-xlm-r-multilingual-v1'
 }
 
 def run(args):
@@ -57,8 +57,8 @@ def run(args):
     print(optimizer)
     
     # set up the trainer    
-    learner = ClusterLearner(model, optimizer, args.temperature, args.base_temperature)
-    training(train_loader, learner, args)
+    learner = ClusterLearner(model, optimizer, args.temperature, args.base_temperature, sentence_transformer=sbert)
+    training_simcse(train_loader, learner, args)
     return None
 
 def get_args(argv):
@@ -83,6 +83,8 @@ def get_args(argv):
     parser.add_argument('--batch_size', type=int, default=400)
     parser.add_argument('--temperature', type=float, default=0.5, help="temperature required by contrastive loss")
     parser.add_argument('--base_temperature', type=float, default=0.1, help="temperature required by contrastive loss")
+    parser.add_argument('--is_use_cl', type=int, default=32)
+    parser.add_argument('--is_use_simcse', type=int, default=32)
     # Clustering
     parser.add_argument('--use_perturbation', action='store_true', help="")
     parser.add_argument('--alpha', type=float, default=1.0)

@@ -7,15 +7,15 @@ Date: 02/26/2021
 
 from os import write
 import sys
-sys.path.append( './' )
-
+sys.path.append( '/mnt/user/wangyuanzhuo/sccl')
+sys.path.append( '/mnt/user/wangyuanzhuo/sccl/')
 import torch
 import argparse
 from sentence_transformers import SentenceTransformer
 from models.Transformers import SCCLBert
 from learners.cluster import ClusterLearner
-from dataloader.dataloader import augment_loader
-from training import training
+from dataloader.dataloader import augment_loader_intention
+from training import training ,training_simcse
 from utils.kmeans import get_kmeans_centers
 from utils.logger import setup_path
 from utils.randomness import set_global_random_seed
@@ -31,8 +31,9 @@ MODEL_CLASS = {
     "bertlarge": 'bert-large-nli-stsb-mean-tokens',
     "bertbase": 'bert-base-nli-stsb-mean-tokens',
     # "chinese": 'distiluse-base-multilingual-cased-v1',
-    "chinese": 'saved_models/paraphrase-xlm-r-multilingual-v1'
+    "chinese": '/mnt/user/wangyuanzhuo/sccl/saved_models/paraphrase-xlm-r-multilingual-v1'
 }
+
 
 def run(args):
     resPath, tensorboard = setup_path(args)
@@ -40,25 +41,34 @@ def run(args):
     set_global_random_seed(args.seed)
 
     # dataset loader
-    train_loader = augment_loader(args)
+    top_train_loader_dict = augment_loader_intention(args)
 
-    # model
-    torch.cuda.set_device(args.gpuid[0])
-    sbert = SentenceTransformer(MODEL_CLASS[args.bert])
-    cluster_centers = get_kmeans_centers(sbert, train_loader, args.num_classes, key='', args=args) 
-    model = SCCLBert(sbert, cluster_centers=cluster_centers, alpha=args.alpha)  
-    model = model.cuda()
+    for key, train_loader in top_train_loader_dict.items():
+        key_arr = key.split('_')
+        intenton_response = key_arr[0]
+        cnt = key_arr[1]
+        if int(cnt) > 200:
+            cluster_num = 10
+        else:
+            cluster_num = 5
+        args.num_classes = cluster_num
+        # model
+        torch.cuda.set_device(args.gpuid[0])
+        sbert = SentenceTransformer(MODEL_CLASS[args.bert])
+        cluster_centers = get_kmeans_centers(sbert, train_loader, args.num_classes, key, args) 
+        model = SCCLBert(sbert, cluster_centers=cluster_centers, alpha=args.alpha)  
+        model = model.cuda()
 
-    # optimizer 
-    optimizer = torch.optim.Adam([
-        {'params':model.sentbert.parameters()}, 
-        {'params':model.head.parameters(), 'lr': args.lr*args.lr_scale},
-        {'params':model.cluster_centers, 'lr': args.lr*args.lr_scale}], lr=args.lr)
-    print(optimizer)
-    
-    # set up the trainer    
-    learner = ClusterLearner(model, optimizer, args.temperature, args.base_temperature)
-    training(train_loader, learner, args)
+        # optimizer 
+        optimizer = torch.optim.Adam([
+            {'params':model.sentbert.parameters()}, 
+            {'params':model.head.parameters(), 'lr': args.lr*args.lr_scale},
+            {'params':model.cluster_centers, 'lr': args.lr*args.lr_scale}], lr=args.lr)
+        print(optimizer)
+        
+        # set up the trainer    
+        learner = ClusterLearner(model, optimizer, args.temperature, args.base_temperature)
+        training_simcse(train_loader, learner, args, key)
     return None
 
 def get_args(argv):
@@ -70,6 +80,7 @@ def get_args(argv):
     parser.add_argument('--cluster_result_path', type=str, default='./saved_result/')
     parser.add_argument('--bert', type=str, default='distill', help="")
     # Dataset
+    parser.add_argument('--intention_file_path', type=str, help="")
     parser.add_argument('--dataset', type=str, default='searchsnippets', help="")
     parser.add_argument('--data_path', type=str, default='../datasets/')
     parser.add_argument('--dataname', type=str, default='searchsnippets.csv', help="")
@@ -83,6 +94,8 @@ def get_args(argv):
     parser.add_argument('--batch_size', type=int, default=400)
     parser.add_argument('--temperature', type=float, default=0.5, help="temperature required by contrastive loss")
     parser.add_argument('--base_temperature', type=float, default=0.1, help="temperature required by contrastive loss")
+    parser.add_argument('--is_use_cl', type=int, default=32)
+    parser.add_argument('--is_use_simcse', type=int, default=32)
     # Clustering
     parser.add_argument('--use_perturbation', action='store_true', help="")
     parser.add_argument('--alpha', type=float, default=1.0)

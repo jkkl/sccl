@@ -14,7 +14,7 @@ import argparse
 from sentence_transformers import SentenceTransformer
 from models.Transformers import SCCLBert
 from learners.cluster import ClusterLearner
-from dataloader.dataloader import augment_loader
+from dataloader.dataloader import augment_loader_onlin_log
 from training import training
 from utils.kmeans import get_kmeans_centers
 from utils.logger import setup_path
@@ -34,31 +34,34 @@ MODEL_CLASS = {
     "chinese": 'saved_models/paraphrase-xlm-r-multilingual-v1'
 }
 
+
 def run(args):
     resPath, tensorboard = setup_path(args)
     args.resPath, args.tensorboard = resPath, tensorboard
     set_global_random_seed(args.seed)
 
     # dataset loader
-    train_loader = augment_loader(args)
-
-    # model
-    torch.cuda.set_device(args.gpuid[0])
+    train_loader = augment_loader_onlin_log(args)
+    key = 'island'
     sbert = SentenceTransformer(MODEL_CLASS[args.bert])
-    cluster_centers = get_kmeans_centers(sbert, train_loader, args.num_classes, key='', args=args) 
-    model = SCCLBert(sbert, cluster_centers=cluster_centers, alpha=args.alpha)  
-    model = model.cuda()
+    for cluster_num in [100, 150, 200, 250, 300, 350, 400, 450, 500, 600,700,1000]:
+        args.num_classes = cluster_num
+        # model
+        torch.cuda.set_device(args.gpuid[0])
+        cluster_centers = get_kmeans_centers(sbert, train_loader, args.num_classes, key, args) 
+        # model = SCCLBert(sbert, cluster_centers=cluster_centers, alpha=args.alpha)  
+        # model = model.cuda()
 
-    # optimizer 
-    optimizer = torch.optim.Adam([
-        {'params':model.sentbert.parameters()}, 
-        {'params':model.head.parameters(), 'lr': args.lr*args.lr_scale},
-        {'params':model.cluster_centers, 'lr': args.lr*args.lr_scale}], lr=args.lr)
-    print(optimizer)
-    
-    # set up the trainer    
-    learner = ClusterLearner(model, optimizer, args.temperature, args.base_temperature)
-    training(train_loader, learner, args)
+        # optimizer 
+        # optimizer = torch.optim.Adam([
+        #     {'params':model.sentbert.parameters()}, 
+        #     {'params':model.head.parameters(), 'lr': args.lr*args.lr_scale},
+        #     {'params':model.cluster_centers, 'lr': args.lr*args.lr_scale}], lr=args.lr)
+        # print(optimizer)
+        
+        # set up the trainer    
+        # learner = ClusterLearner(model, optimizer, args.temperature, args.base_temperature)
+        # training(train_loader, learner, args, key)
     return None
 
 def get_args(argv):
@@ -67,11 +70,12 @@ def get_args(argv):
     parser.add_argument('--seed', type=int, default=0, help="")
     parser.add_argument('--print_freq', type=float, default=100, help="")  
     parser.add_argument('--result_path', type=str, default='./results/')
-    parser.add_argument('--cluster_result_path', type=str, default='./saved_result/')
     parser.add_argument('--bert', type=str, default='distill', help="")
     # Dataset
+    parser.add_argument('--intention_file_path', type=str, help="")
     parser.add_argument('--dataset', type=str, default='searchsnippets', help="")
     parser.add_argument('--data_path', type=str, default='../datasets/')
+    parser.add_argument('--cluster_result_path', type=str, default='saved_result/island')
     parser.add_argument('--dataname', type=str, default='searchsnippets.csv', help="")
     parser.add_argument('--num_classes', type=int, default=8, help="")
     parser.add_argument('--max_length', type=int, default=32)
