@@ -5,7 +5,7 @@ Author: Dejiao Zhang (dejiaoz@amazon.com)
 Date: 02/26/2021
 """
 
-from os import write
+import os
 import sys
 sys.path.append( './' )
 
@@ -37,10 +37,13 @@ MODEL_CLASS = {
 def run(args):
     resPath, tensorboard = setup_path(args)
     args.resPath, args.tensorboard = resPath, tensorboard
+    if not os.path.exists(args.cluster_result_path):
+        os.makedirs(args.cluster_result_path)
+    
     set_global_random_seed(args.seed)
 
     # dataset loader
-    train_loader = augment_loader(args)
+    train_loader = augment_loader(args, "txt", 'RequestContent')
 
     # model
     torch.cuda.set_device(args.gpuid[0])
